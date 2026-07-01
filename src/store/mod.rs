@@ -92,20 +92,31 @@ pub struct Store {
 impl Store {
     /// Connect to Postgres and apply the idempotent schema.
     pub async fn open(config: &QueueConfig) -> Result<Self> {
+        // LAZY connect + background migrate so a cold DB dial on (re)spawn never
+        // blocks the daemon initialize handshake (which surfaced as "plugin
+        // connection lost"). First query connects; migration is idempotent.
         let pool = PgPoolOptions::new()
             // Small pool: this plugin shares one Railway Postgres with Better
             // Auth + the config/subject/chat backends. Keep the shared
             // connection budget well under Postgres `max_connections`.
             .max_connections(4)
-            .connect(&config.database_url)
-            .await
-            .context("failed to connect to Postgres database")?;
+            .connect_lazy(&config.database_url)
+            .context("failed to create Postgres pool")?;
         let store = Self {
             pool,
             table: config.table.clone(),
             lease_ttl_secs: config.lease_ttl_secs,
         };
-        store.migrate().await?;
+        let migrate_store = Self {
+            pool: store.pool.clone(),
+            table: store.table.clone(),
+            lease_ttl_secs: store.lease_ttl_secs,
+        };
+        tokio::spawn(async move {
+            if let Err(error) = migrate_store.migrate().await {
+                eprintln!("[animus-queue-postgres] background migrate failed (schema likely present; retried next spawn): {error:#}");
+            }
+        });
         Ok(store)
     }
 
