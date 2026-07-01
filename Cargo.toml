@@ -1,0 +1,41 @@
+[package]
+name = "animus-queue-postgres"
+version = "0.1.0"
+edition = "2021"
+license = "Elastic-2.0"
+description = "Durable Postgres-backed queue plugin for Animus — survives daemon restarts/redeploys and reclaims crashed leases. Wire-compatible with animus-queue-default (the `queue` PluginKind)."
+repository = "https://github.com/launchapp-dev/animus-queue-postgres"
+homepage = "https://github.com/launchapp-dev/animus-cli"
+default-run = "animus-queue-postgres"
+
+[lib]
+name = "animus_queue_postgres"
+path = "src/lib.rs"
+
+[[bin]]
+name = "animus-queue-postgres"
+path = "src/main.rs"
+
+[dependencies]
+# Match animus-queue-default v0.3.3's protocol pin EXACTLY (tag v0.5.10 on
+# launchapp-dev/animus-protocol) so the wire types are byte-identical to the
+# reference queue plugin the v0.6.x daemon already talks to. The queue RPC
+# surface is frozen here regardless of the portal's config/subject/chat plugins
+# pinning v0.1.25 — those are a different protocol crate family.
+animus-plugin-protocol  = { git = "https://github.com/launchapp-dev/animus-protocol", tag = "v0.5.10" }
+animus-queue-protocol   = { git = "https://github.com/launchapp-dev/animus-protocol", tag = "v0.5.10" }
+animus-subject-protocol = { git = "https://github.com/launchapp-dev/animus-protocol", tag = "v0.5.10" }
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs", "io-util", "io-std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+thiserror = "1"
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sqlx = { version = "0.7", default-features = false, features = ["runtime-tokio-rustls", "postgres", "json", "chrono"] }
+
+[dev-dependencies]
+tempfile = "3"
